@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 import os
+import json
 from pathlib import Path
 
 app = FastAPI(title="Mergington High School API",
@@ -18,6 +19,18 @@ app = FastAPI(title="Mergington High School API",
 current_dir = Path(__file__).parent
 app.mount("/static", StaticFiles(directory=os.path.join(Path(__file__).parent,
           "static")), name="static")
+
+activities_file = current_dir / "activities.json"
+
+def load_activities():
+    global activities
+    if activities_file.exists():
+        with open(activities_file, 'r') as f:
+            activities = json.load(f)
+
+def save_activities():
+    with open(activities_file, 'w') as f:
+        json.dump(activities, f, indent=2)
 
 # In-memory activity database
 activities = {
@@ -78,6 +91,9 @@ activities = {
 }
 
 
+load_activities()
+
+
 @app.get("/")
 def root():
     return RedirectResponse(url="/static/index.html")
@@ -105,4 +121,21 @@ def signup_for_activity(activity_name: str, email: str):
     # Add student
     
     activity["participants"].append(email)
+    save_activities()
     return {"message": f"Signed up {email} for {activity_name}"}
+
+
+@app.delete("/activities/{activity_name}/signup")
+def unregister_from_activity(activity_name: str, email: str):
+    """Unregister a student from an activity"""
+    if activity_name not in activities:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    activity = activities[activity_name]
+
+    if email not in activity["participants"]:
+        raise HTTPException(status_code=400, detail="Student is not signed up for this activity")
+
+    activity["participants"].remove(email)
+    save_activities()
+    return {"message": f"Unregistered {email} from {activity_name}"}
